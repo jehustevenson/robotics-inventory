@@ -1,62 +1,177 @@
-import { createSlice } from "@reduxjs/toolkit";
+// src/store/inventorySlice.js
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import * as api from "../services/sheetsApi";
 
-const initialItems = [
-  { id: 1, name: "Arduino Uno R3", category: "Microcontrollers", totalQuantity: 15 },
-  { id: 2, name: "Raspberry Pi 4", category: "Microcontrollers", totalQuantity: 10 },
-  { id: 3, name: "Ultrasonic Sensor HC-SR04", category: "Sensors", totalQuantity: 30 },
-  { id: 4, name: "IR Sensor Module", category: "Sensors", totalQuantity: 25 },
-  { id: 5, name: "Temperature Sensor DHT11", category: "Sensors", totalQuantity: 20 },
-  { id: 6, name: "DC Motor 12V", category: "Motors", totalQuantity: 18 },
-  { id: 7, name: "Servo Motor SG90", category: "Motors", totalQuantity: 22 },
-  { id: 8, name: "Stepper Motor 28BYJ-48", category: "Motors", totalQuantity: 12 },
-  { id: 9, name: "LEGO Mindstorms EV3 Kit", category: "Kits", totalQuantity: 8 },
-  { id: 10, name: "Arduino Starter Kit", category: "Kits", totalQuantity: 6 },
-  { id: 11, name: "Robotics Sensor Pack", category: "Kits", totalQuantity: 5 },
-];
+// ── Async Thunks ──────────────────────────────────────────────
 
-const initialTransactions = [
-  { id: 1, itemId: 1, itemName: "Arduino Uno R3", category: "Microcontrollers", quantity: 3, teacherName: "Ms. Sarah Johnson", borrowDate: "2026-02-28T09:15:00", returnDate: null, returned: false },
-  { id: 2, itemId: 3, itemName: "Ultrasonic Sensor HC-SR04", category: "Sensors", quantity: 5, teacherName: "Mr. David Lee", borrowDate: "2026-02-27T11:30:00", returnDate: null, returned: false },
-  { id: 3, itemId: 6, itemName: "DC Motor 12V", category: "Motors", quantity: 4, teacherName: "Ms. Emily Chen", borrowDate: "2026-02-26T14:00:00", returnDate: "2026-03-01T10:00:00", returned: true },
-  { id: 4, itemId: 9, itemName: "LEGO Mindstorms EV3 Kit", category: "Kits", quantity: 2, teacherName: "Mr. Robert Kim", borrowDate: "2026-03-01T08:45:00", returnDate: null, returned: false },
-  { id: 5, itemId: 7, itemName: "Servo Motor SG90", category: "Motors", quantity: 6, teacherName: "Ms. Patricia Wong", borrowDate: "2026-03-02T13:20:00", returnDate: null, returned: false },
-  { id: 6, itemId: 4, itemName: "IR Sensor Module", category: "Sensors", quantity: 3, teacherName: "Mr. James Miller", borrowDate: "2026-03-03T10:00:00", returnDate: null, returned: false },
-  { id: 7, itemId: 2, itemName: "Raspberry Pi 4", category: "Microcontrollers", quantity: 2, teacherName: "Ms. Linda Park", borrowDate: "2026-02-25T09:00:00", returnDate: "2026-02-28T15:30:00", returned: true },
-];
+export const fetchDashboard = createAsyncThunk(
+  "inventory/fetchDashboard",
+  async (_, { rejectWithValue }) => {
+    try { return await api.getDashboard(); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
 
+export const fetchItems = createAsyncThunk(
+  "inventory/fetchItems",
+  async (_, { rejectWithValue }) => {
+    try { return await api.getItems(); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const fetchTransactions = createAsyncThunk(
+  "inventory/fetchTransactions",
+  async (_, { rejectWithValue }) => {
+    try { return await api.getTransactions(); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const addItemThunk = createAsyncThunk(
+  "inventory/addItem",
+  async (payload, { rejectWithValue }) => {
+    try { return await api.addItem(payload); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const updateItemThunk = createAsyncThunk(
+  "inventory/updateItem",
+  async (payload, { rejectWithValue }) => {
+    try { return await api.updateItem(payload); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const deleteItemThunk = createAsyncThunk(
+  "inventory/deleteItem",
+  async (id, { rejectWithValue }) => {
+    try {
+      await api.deleteItem(id);
+      return id;
+    } catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const borrowItemThunk = createAsyncThunk(
+  "inventory/borrowItem",
+  async (payload, { rejectWithValue }) => {
+    try { return await api.borrowItem(payload); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+export const returnItemThunk = createAsyncThunk(
+  "inventory/returnItem",
+  async (id, { rejectWithValue }) => {
+    try { return await api.returnItem(id); }
+    catch (e) { return rejectWithValue(e.message); }
+  }
+);
+
+// ── Slice ─────────────────────────────────────────────────────
 const inventorySlice = createSlice({
   name: "inventory",
   initialState: {
-    items: initialItems,
-    transactions: initialTransactions,
-    nextItemId: 12,
-    nextTransactionId: 8,
+    items: [],
+    transactions: [],
+    loading: false,
+    actionLoading: false, // for add/edit/delete/borrow/return
+    error: null,
   },
   reducers: {
-    addItem: (state, action) => {
-      state?.items?.push({ ...action?.payload, id: state?.nextItemId });
-      state.nextItemId += 1;
-    },
-    updateItem: (state, action) => {
-      const idx = state?.items?.findIndex(i => i?.id === action?.payload?.id);
-      if (idx !== -1) state.items[idx] = action?.payload;
-    },
-    deleteItem: (state, action) => {
-      state.items = state?.items?.filter(i => i?.id !== action?.payload);
-    },
-    borrowItem: (state, action) => {
-      state?.transactions?.push({ ...action?.payload, id: state?.nextTransactionId });
-      state.nextTransactionId += 1;
-    },
-    returnItem: (state, action) => {
-      const idx = state?.transactions?.findIndex(t => t?.id === action?.payload);
-      if (idx !== -1) {
-        state.transactions[idx].returned = true;
-        state.transactions[idx].returnDate = new Date()?.toISOString();
-      }
-    },
+    clearError: (state) => { state.error = null; },
+  },
+  extraReducers: (builder) => {
+
+    // helper to mark loading start/end
+    const pending  = (state) => { state.loading = true;  state.error = null; };
+    const rejected = (state, action) => {
+      state.loading = false;
+      state.actionLoading = false;
+      state.error = action.payload || "Something went wrong";
+    };
+
+    // ── fetchDashboard ────────────────────────────────────────
+    builder
+      .addCase(fetchDashboard.pending,  pending)
+      .addCase(fetchDashboard.rejected, rejected)
+      .addCase(fetchDashboard.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.items        = payload.items        || [];
+        state.transactions = payload.transactions || [];
+      });
+
+    // ── fetchItems ────────────────────────────────────────────
+    builder
+      .addCase(fetchItems.pending,  pending)
+      .addCase(fetchItems.rejected, rejected)
+      .addCase(fetchItems.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.items = payload || [];
+      });
+
+    // ── fetchTransactions ─────────────────────────────────────
+    builder
+      .addCase(fetchTransactions.pending,  pending)
+      .addCase(fetchTransactions.rejected, rejected)
+      .addCase(fetchTransactions.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.transactions = payload || [];
+      });
+
+    // ── addItem ───────────────────────────────────────────────
+    builder
+      .addCase(addItemThunk.pending,  (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(addItemThunk.rejected, rejected)
+      .addCase(addItemThunk.fulfilled, (state, { payload }) => {
+        state.actionLoading = false;
+        state.items.push(payload);
+      });
+
+    // ── updateItem ────────────────────────────────────────────
+    builder
+      .addCase(updateItemThunk.pending,  (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(updateItemThunk.rejected, rejected)
+      .addCase(updateItemThunk.fulfilled, (state, { payload }) => {
+        state.actionLoading = false;
+        const idx = state.items.findIndex(i => i.id === payload.id);
+        if (idx !== -1) state.items[idx] = { ...state.items[idx], ...payload };
+      });
+
+    // ── deleteItem ────────────────────────────────────────────
+    builder
+      .addCase(deleteItemThunk.pending,  (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(deleteItemThunk.rejected, rejected)
+      .addCase(deleteItemThunk.fulfilled, (state, { payload }) => {
+        state.actionLoading = false;
+        state.items = state.items.filter(i => i.id !== payload);
+      });
+
+    // ── borrowItem ────────────────────────────────────────────
+    builder
+      .addCase(borrowItemThunk.pending,  (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(borrowItemThunk.rejected, rejected)
+      .addCase(borrowItemThunk.fulfilled, (state, { payload }) => {
+        state.actionLoading = false;
+        state.transactions.unshift(payload);
+      });
+
+    // ── returnItem ────────────────────────────────────────────
+    builder
+      .addCase(returnItemThunk.pending,  (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(returnItemThunk.rejected, rejected)
+      .addCase(returnItemThunk.fulfilled, (state, { payload }) => {
+        state.actionLoading = false;
+        const idx = state.transactions.findIndex(t => t.id === payload.id);
+        if (idx !== -1) {
+          state.transactions[idx].returned   = true;
+          state.transactions[idx].returnDate = payload.returnDate;
+        }
+      });
   },
 });
 
-export const { addItem, updateItem, deleteItem, borrowItem, returnItem } = inventorySlice?.actions;
-export default inventorySlice?.reducer;
+export const { clearError } = inventorySlice.actions;
+export default inventorySlice.reducer;
