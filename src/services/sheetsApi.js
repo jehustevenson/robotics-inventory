@@ -1,29 +1,52 @@
 // src/services/sheetsApi.js
 // ─────────────────────────────────────────────────────────────
-//  Replace SCRIPT_URL with your deployed Apps Script Web App URL
-//  e.g. https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
+//  Apps Script CORS fix:
+//  - GET requests work fine cross-origin with redirect: "follow"
+//  - POST requests must use Content-Type: text/plain (NOT application/json)
+//  - Both must use redirect: "follow" — Apps Script issues a redirect
 // ─────────────────────────────────────────────────────────────
 
 const SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "";
 
+if (!SCRIPT_URL) {
+  console.error("[sheetsApi] VITE_GOOGLE_SCRIPT_URL is not set in your .env file");
+}
+
 async function get(action, params = {}) {
-  const qs = new URLSearchParams({ action, ...params }).toString();
+  const qs  = new URLSearchParams({ action, ...params }).toString();
   const url = `${SCRIPT_URL}?${qs}`;
-  const res = await fetch(url);
+
+  const res = await fetch(url, {
+    method: "GET",
+    redirect: "follow",
+  });
+
   if (!res.ok) throw new Error(`Network error: ${res.status}`);
-  const json = await res.json();
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error("Invalid JSON from Apps Script: " + text.slice(0, 200)); }
+
   if (json.status === "error") throw new Error(json.message);
   return json.data;
 }
 
 async function post(body) {
   const res = await fetch(SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" }, // required for Apps Script CORS
-    body: JSON.stringify(body),
+    method:   "POST",
+    redirect: "follow",
+    headers:  { "Content-Type": "text/plain;charset=utf-8" },
+    body:     JSON.stringify(body),
   });
+
   if (!res.ok) throw new Error(`Network error: ${res.status}`);
-  const json = await res.json();
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error("Invalid JSON from Apps Script: " + text.slice(0, 200)); }
+
   if (json.status === "error") throw new Error(json.message);
   return json.data;
 }
