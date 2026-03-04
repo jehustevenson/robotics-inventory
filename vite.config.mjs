@@ -15,19 +15,11 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: [".amazonaws.com", ".builtwithrocket.new"],
     proxy: {
-      // Any request to /api/sheets gets forwarded to Apps Script
-      // This runs server-side so there is no CORS issue at all
+      // Forward /api/sheets to the Express proxy server
       "/api/sheets": {
-        target: "https://script.google.com",
+        target: "http://localhost:3001",
         changeOrigin: true,
-        secure: true,
-        followRedirects: true,
-        rewrite: (path) => {
-          // Strip /api/sheets prefix — the full Apps Script path
-          // comes from the VITE_GOOGLE_SCRIPT_PATH env var
-          // e.g. /macros/s/YOUR_DEPLOYMENT_ID/exec
-          return path.replace(/^\/api\/sheets/, process.env.VITE_GOOGLE_SCRIPT_PATH || "");
-        },
+        secure: false,
       },
     },
   },
