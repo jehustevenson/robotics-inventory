@@ -92,7 +92,7 @@ const BorrowAndReturnSystem = () => {
       {/* Toast */}
       {toast && (
         <div
-          className="fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-w-sm"
+          className="fixed top-20 right-4 z-[200] flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-w-sm"
           style={{ backgroundColor: toast.type === "success" ? "var(--color-success)" : "var(--color-error)", color: "white" }}
           role="alert"
         >

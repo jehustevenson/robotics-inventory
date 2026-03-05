@@ -63,12 +63,14 @@ const InventoryManagement = () => {
   [itemsWithBorrowed, search, categoryFilter]);
 
   const handleSave = useCallback(async (formData) => {
+    const { totalQty, ...rest } = formData;
+    const payload = { ...rest, totalQuantity: totalQty ?? formData.totalQuantity };
     if (editItem) {
-      const res = await dispatch(updateItemThunk({ id: editItem.id, ...formData }));
-      if (!res.error) { showToast(`"${formData.name}" updated.`); setEditItem(null); }
+      const res = await dispatch(updateItemThunk({ id: editItem.id, ...payload }));
+      if (!res.error) { showToast(`"${payload.name}" updated.`); setEditItem(null); }
     } else {
-      const res = await dispatch(addItemThunk(formData));
-      if (!res.error) showToast(`"${formData.name}" added to inventory.`);
+      const res = await dispatch(addItemThunk(payload));
+      if (!res.error) showToast(`"${payload.name}" added to inventory.`);
     }
   }, [editItem, dispatch, showToast]);
 
@@ -91,7 +93,7 @@ const InventoryManagement = () => {
       {/* Toast */}
       {toast && (
         <div
-          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium"
+          className="fixed top-20 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium"
           style={{
             background: toast.type === "error" ? "var(--color-error)" : "var(--color-success)",
             color: "#fff", fontFamily: "var(--font-caption)", maxWidth: "320px",

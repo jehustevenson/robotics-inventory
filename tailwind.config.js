@@ -9,50 +9,50 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: 'var(--color-primary)',           // blue-900 deep institutional
-          foreground: 'var(--color-primary-foreground)', // white
+          DEFAULT: 'var(--color-primary)',
+          foreground: 'var(--color-primary-foreground)',
         },
         secondary: {
-          DEFAULT: 'var(--color-secondary)',          // green-800 forest
-          foreground: 'var(--color-secondary-foreground)', // white
+          DEFAULT: 'var(--color-secondary)',
+          foreground: 'var(--color-secondary-foreground)',
         },
         accent: {
-          DEFAULT: 'var(--color-accent)',             // red-400 warm coral
-          foreground: 'var(--color-accent-foreground)', // white
+          DEFAULT: 'var(--color-accent)',
+          foreground: 'var(--color-accent-foreground)',
         },
-        background: 'var(--color-background)',        // gray-50 soft off-white
-        foreground: 'var(--color-foreground)',        // gray-900 rich charcoal
+        background: 'var(--color-background)',
+        foreground: 'var(--color-foreground)',
         card: {
-          DEFAULT: 'var(--color-card)',               // white
-          foreground: 'var(--color-card-foreground)', // gray-900
+          DEFAULT: 'var(--color-card)',
+          foreground: 'var(--color-card-foreground)',
         },
         popover: {
-          DEFAULT: 'var(--color-popover)',            // white
-          foreground: 'var(--color-popover-foreground)', // gray-900
+          DEFAULT: 'var(--color-popover)',
+          foreground: 'var(--color-popover-foreground)',
         },
         muted: {
-          DEFAULT: 'var(--color-muted)',              // gray-100
-          foreground: 'var(--color-muted-foreground)', // gray-600
+          DEFAULT: 'var(--color-muted)',
+          foreground: 'var(--color-muted-foreground)',
         },
         success: {
-          DEFAULT: 'var(--color-success)',            // green-500
-          foreground: 'var(--color-success-foreground)', // white
+          DEFAULT: 'var(--color-success)',
+          foreground: 'var(--color-success-foreground)',
         },
         warning: {
-          DEFAULT: 'var(--color-warning)',            // amber-400
-          foreground: 'var(--color-warning-foreground)', // gray-900
+          DEFAULT: 'var(--color-warning)',
+          foreground: 'var(--color-warning-foreground)',
         },
         error: {
-          DEFAULT: 'var(--color-error)',              // red-600
-          foreground: 'var(--color-error-foreground)', // white
+          DEFAULT: 'var(--color-error)',
+          foreground: 'var(--color-error-foreground)',
         },
         destructive: {
-          DEFAULT: 'var(--color-destructive)',        // red-600
-          foreground: 'var(--color-destructive-foreground)', // white
+          DEFAULT: 'var(--color-destructive)',
+          foreground: 'var(--color-destructive-foreground)',
         },
-        border: 'var(--color-border)',                // primary-tinted border
-        input: 'var(--color-input)',                  // primary-tinted input bg
-        ring: 'var(--color-ring)',                    // primary blue focus ring
+        border: 'var(--color-border)',
+        input: 'var(--color-input)',
+        ring: 'var(--color-ring)',
       },
       fontFamily: {
         heading: ['Crimson Text', 'Georgia', 'serif'],
@@ -79,11 +79,11 @@ module.exports = {
         xl: '20px',
       },
       boxShadow: {
-        sm: '0 1px 3px rgba(30, 58, 95, 0.08)',
-        DEFAULT: '0 2px 6px rgba(30, 58, 95, 0.10)',
-        md: '0 2px 6px rgba(30, 58, 95, 0.10)',
-        lg: '0 6px 12px rgba(30, 58, 95, 0.12)',
-        xl: '0 20px 40px -8px rgba(30, 58, 95, 0.16)',
+        sm:  '0 1px 3px rgba(33, 82, 33, 0.08)',
+        DEFAULT: '0 2px 6px rgba(33, 82, 33, 0.10)',
+        md:  '0 2px 6px rgba(33, 82, 33, 0.10)',
+        lg:  '0 6px 12px rgba(33, 82, 33, 0.12)',
+        xl:  '0 20px 40px -8px rgba(33, 82, 33, 0.16)',
       },
       transitionTimingFunction: {
         'ease-academic': 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
@@ -107,15 +107,9 @@ module.exports = {
         'toast': '300',
         'debug': '400',
       },
-      minHeight: {
-        'touch': '48px',
-      },
-      minWidth: {
-        'touch': '48px',
-      },
-      scrollPadding: {
-        'nav': '80px',
-      },
+      minHeight: { 'touch': '48px' },
+      minWidth:  { 'touch': '48px' },
+      scrollPadding: { 'nav': '80px' },
     },
   },
   plugins: [

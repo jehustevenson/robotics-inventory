@@ -80,7 +80,7 @@ const TabNavigation = ({ onTabChange }) => {
           <div className="tab-nav-logo" aria-hidden="true">
             <Icon name="Bot" size={20} color="currentColor" strokeWidth={2} />
           </div>
-          <span className="tab-nav-brand-text">RoboLend</span>
+          <span className="tab-nav-brand-text">GIS Robotics Inventory</span>
         </div>
 
         {/* Desktop Tabs */}
@@ -130,6 +130,7 @@ const TabNavigation = ({ onTabChange }) => {
           </button>
         </div>
       </div>
+
       {/* Mobile Menu */}
       <div
         id="mobile-nav-menu"
