@@ -1,18 +1,16 @@
 // src/services/sheetsApi.js
-// ─────────────────────────────────────────────────────────────
-//  All requests go to the Express proxy server (/api/sheets)
-//  The proxy forwards them to Apps Script server-side,
-//  so there are zero CORS issues in the browser.
-//
-//  Dev:  proxy runs at http://localhost:3001
-//  Prod: set VITE_API_URL to your deployed server URL
-// ─────────────────────────────────────────────────────────────
-
 const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/sheets`
   : "/api/sheets";
 
-console.log("[sheetsApi] API_BASE:", API_BASE);
+function getToken() {
+  return localStorage.getItem("rbl_token");
+}
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function get(action, params = {}) {
   const qs  = new URLSearchParams({ action, ...params }).toString();
@@ -20,11 +18,18 @@ async function get(action, params = {}) {
 
   let res;
   try {
-    res = await fetch(url, { method: "GET" });
+    res = await fetch(url, { method: "GET", headers: authHeaders() });
   } catch (err) {
-    throw new Error(
-      `Cannot reach proxy server. Is it running on port 3001? (${err.message})`
-    );
+    throw new Error(`Cannot reach proxy server. Is it running on port 3001? (${err.message})`);
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    // Token expired or invalid — clear storage and reload to login
+    localStorage.removeItem("rbl_token");
+    localStorage.removeItem("rbl_username");
+    localStorage.removeItem("rbl_role");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
   }
 
   if (!res.ok) throw new Error(`Server error: ${res.status} ${res.statusText}`);
@@ -39,13 +44,19 @@ async function post(body) {
   try {
     res = await fetch(API_BASE, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body:    JSON.stringify(body),
     });
   } catch (err) {
-    throw new Error(
-      `Cannot reach proxy server. Is it running on port 3001? (${err.message})`
-    );
+    throw new Error(`Cannot reach proxy server. Is it running on port 3001? (${err.message})`);
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem("rbl_token");
+    localStorage.removeItem("rbl_username");
+    localStorage.removeItem("rbl_role");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
   }
 
   if (!res.ok) throw new Error(`Server error: ${res.status} ${res.statusText}`);
