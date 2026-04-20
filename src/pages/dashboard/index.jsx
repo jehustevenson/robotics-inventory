@@ -12,6 +12,7 @@ import Icon from "components/AppIcon";
 const Dashboard = () => {
   const dispatch = useDispatch();
   const { items, transactions, loading, error } = useSelector((s) => s.inventory);
+  const { role } = useSelector((s) => s.auth);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
 
   useEffect(() => {
@@ -48,10 +49,10 @@ const Dashboard = () => {
   );
 
   const quickActions = [
-    { title: "Inventory",  description: "Browse, add, edit, or delete robotic equipment items.", iconName: "Package",         route: "/inventory-management",      variant: "outline"    },
+    { title: "Inventory",  description: "Browse, add, edit, or delete robotic equipment items.", iconName: "Package",         route: "/inventory-management",      variant: "outline",   adminOnly: true },
     { title: "Borrow",     description: "Check out equipment for your class session.",            iconName: "ArrowUpFromLine", route: "/borrow-and-return-system",  variant: "default"    },
     { title: "Return",     description: "Mark borrowed items as returned and update availability.", iconName: "ArrowDownToLine",route: "/borrow-and-return-system",  variant: "secondary"  },
-  ];
+  ].filter((a) => !a.adminOnly || role === "admin");
 
   return (
     <div className="min-h-screen bg-[var(--color-background)]">

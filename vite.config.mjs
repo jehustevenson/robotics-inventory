@@ -15,8 +15,8 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: [".amazonaws.com", ".builtwithrocket.new"],
     proxy: {
-      // Forward /api/sheets to the Express proxy server
-      "/api/sheets": {
+      // Forward all /api/* requests (auth + sheets) to the Express proxy server
+      "/api": {
         target: "http://localhost:3001",
         changeOrigin: true,
         secure: false,
