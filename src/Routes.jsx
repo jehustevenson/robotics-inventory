@@ -9,6 +9,7 @@ import LoginPage from "./pages/login";
 import InventoryManagement from "./pages/inventory-management";
 import Dashboard from "./pages/dashboard";
 import BorrowAndReturnSystem from "./pages/borrow-and-return-system";
+import UserManagement from "./pages/user-management";
 
 const Routes = () => {
   return (
@@ -53,6 +54,14 @@ const Routes = () => {
             element={
               <ProtectedRoute adminOnly>
                 <InventoryManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user-management"
+            element={
+              <ProtectedRoute adminOnly>
+                <UserManagement />
               </ProtectedRoute>
             }
           />

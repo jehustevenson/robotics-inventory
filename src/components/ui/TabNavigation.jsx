@@ -30,6 +30,14 @@ const ALL_TABS = [
     ariaLabel: "Go to Borrow & Return System",
     adminOnly: false,
   },
+  {
+    id: "user-management",
+    label: "Users",
+    path: "/user-management",
+    icon: "Users",
+    ariaLabel: "Go to User Management",
+    adminOnly: true,
+  },
 ];
 
 const TabNavigation = ({ onTabChange }) => {

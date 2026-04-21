@@ -10,7 +10,13 @@ const CATEGORIES = [
   { value: "Kits", label: "Kits" },
 ];
 
-const EMPTY_FORM = { name: "", category: "", totalQty: "" };
+const SECTIONS = [
+  { value: "Infant School",    label: "Infant School" },
+  { value: "Junior School",    label: "Junior School" },
+  { value: "Secondary School", label: "Secondary School" },
+];
+
+const EMPTY_FORM = { name: "", category: "", section: "", totalQty: "" };
 
 const AddItemForm = ({ editItem, onSave, onCancelEdit }) => {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -19,7 +25,12 @@ const AddItemForm = ({ editItem, onSave, onCancelEdit }) => {
 
   useEffect(() => {
     if (editItem) {
-      setForm({ name: editItem?.name, category: editItem?.category, totalQty: String(editItem?.totalQty) });
+      setForm({
+        name:     editItem?.name,
+        category: editItem?.category,
+        section:  editItem?.section || "",
+        totalQty: String(editItem?.totalQty),
+      });
       setErrors({});
     } else {
       setForm(EMPTY_FORM);
@@ -31,6 +42,7 @@ const AddItemForm = ({ editItem, onSave, onCancelEdit }) => {
     const errs = {};
     if (!form?.name?.trim()) errs.name = "Item name is required.";
     if (!form?.category) errs.category = "Category is required.";
+    if (!form?.section) errs.section = "School section is required.";
     if (!form?.totalQty || isNaN(Number(form?.totalQty)) || Number(form?.totalQty) < 1)
       errs.totalQty = "Enter a valid quantity (min 1).";
     return errs;
@@ -42,7 +54,12 @@ const AddItemForm = ({ editItem, onSave, onCancelEdit }) => {
     if (Object.keys(errs)?.length > 0) { setErrors(errs); return; }
     setLoading(true);
     await new Promise((r) => setTimeout(r, 400));
-    onSave({ name: form?.name?.trim(), category: form?.category, totalQty: Number(form?.totalQty) });
+    onSave({
+      name:     form?.name?.trim(),
+      category: form?.category,
+      section:  form?.section,
+      totalQty: Number(form?.totalQty),
+    });
     setForm(EMPTY_FORM);
     setErrors({});
     setLoading(false);
@@ -89,6 +106,16 @@ const AddItemForm = ({ editItem, onSave, onCancelEdit }) => {
           value={form?.category}
           onChange={(val) => setForm((f) => ({ ...f, category: val }))}
           error={errors?.category}
+          required
+        />
+
+        <Select
+          label="School Section"
+          placeholder="Select a school section"
+          options={SECTIONS}
+          value={form?.section}
+          onChange={(val) => setForm((f) => ({ ...f, section: val }))}
+          error={errors?.section}
           required
         />
 

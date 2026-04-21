@@ -11,6 +11,14 @@ const STATUS_FILTERS = [
   { key: 'all',        label: 'All',          icon: 'List'         },
 ];
 
+// Anything borrowed for more than this many days is flagged overdue.
+const OVERDUE_DAYS = 14;
+
+function daysSince(date) {
+  const ms = Date.now() - new Date(date).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
 const ReturnList = ({ transactions, onReturn, loading, returningId }) => {
   const [filterStatus, setFilterStatus] = useState('unreturned');
   const [search,       setSearch]       = useState('');
@@ -96,13 +104,15 @@ const ReturnList = ({ transactions, onReturn, loading, returningId }) => {
         <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
           {filtered.map(t => {
             const isReturned = String(t.returned) === 'true';
+            const daysOut    = t.borrowDate ? daysSince(t.borrowDate) : 0;
+            const overdue    = !isReturned && daysOut > OVERDUE_DAYS;
             return (
               <div
                 key={t.id}
                 className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 md:p-4 rounded-[var(--radius-md)] border transition-all"
                 style={{
-                  borderColor:     isReturned ? 'var(--color-border)' : 'rgba(232,90,79,0.25)',
-                  backgroundColor: isReturned ? 'var(--color-background)' : 'rgba(232,90,79,0.04)',
+                  borderColor:     overdue ? 'rgba(220,38,38,0.35)' : isReturned ? 'var(--color-border)' : 'rgba(232,90,79,0.25)',
+                  backgroundColor: overdue ? 'rgba(220,38,38,0.05)' : isReturned ? 'var(--color-background)' : 'rgba(232,90,79,0.04)',
                 }}
               >
                 <div className="flex-1 min-w-0">
@@ -122,6 +132,16 @@ const ReturnList = ({ transactions, onReturn, loading, returningId }) => {
                       <Icon name={isReturned ? 'CheckCircle' : 'Clock'} size={11} color="currentColor" strokeWidth={2.5} />
                       {isReturned ? 'Returned' : 'Not Returned'}
                     </span>
+                    {overdue && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800"
+                        title={`Borrowed ${daysOut} days ago — overdue by ${daysOut - OVERDUE_DAYS} day(s)`}
+                        style={{ fontFamily: 'var(--font-caption)' }}
+                      >
+                        <Icon name="AlertTriangle" size={11} color="currentColor" strokeWidth={2.5} />
+                        Overdue
+                      </span>
+                    )}
                   </div>
 
                   {/* Meta info */}

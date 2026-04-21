@@ -9,6 +9,19 @@ const categoryColors = {
   Kits: "bg-green-100 text-green-800",
 };
 
+// Anything borrowed for more than this many days is flagged overdue.
+const OVERDUE_DAYS = 14;
+
+function daysSince(date) {
+  const ms = Date.now() - new Date(date).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+function isOverdue(borrowDate) {
+  if (!borrowDate) return false;
+  return daysSince(borrowDate) > OVERDUE_DAYS;
+}
+
 const BorrowedItemsTable = ({ borrowedTransactions }) => {
   if (borrowedTransactions?.length === 0) {
     return (
@@ -53,10 +66,20 @@ const BorrowedItemsTable = ({ borrowedTransactions }) => {
                   {format(new Date(tx.borrowDate), "MM/dd/yyyy HH:mm")}
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                    <Icon name="Clock" size={12} color="currentColor" strokeWidth={2} />
-                    Borrowed
-                  </span>
+                  {isOverdue(tx?.borrowDate) ? (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800"
+                      title={`Borrowed ${daysSince(tx.borrowDate)} days ago`}
+                    >
+                      <Icon name="AlertTriangle" size={12} color="currentColor" strokeWidth={2} />
+                      Overdue
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                      <Icon name="Clock" size={12} color="currentColor" strokeWidth={2} />
+                      Borrowed
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -74,10 +97,20 @@ const BorrowedItemsTable = ({ borrowedTransactions }) => {
                   {tx?.category}
                 </span>
               </div>
-              <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                <Icon name="Clock" size={11} color="currentColor" strokeWidth={2} />
-                Borrowed
-              </span>
+              {isOverdue(tx?.borrowDate) ? (
+                <span
+                  className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800"
+                  title={`Borrowed ${daysSince(tx.borrowDate)} days ago`}
+                >
+                  <Icon name="AlertTriangle" size={11} color="currentColor" strokeWidth={2} />
+                  Overdue
+                </span>
+              ) : (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                  <Icon name="Clock" size={11} color="currentColor" strokeWidth={2} />
+                  Borrowed
+                </span>
+              )}
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[var(--color-muted-foreground)]">
               <div>

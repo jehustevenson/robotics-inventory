@@ -1,9 +1,12 @@
 // src/pages/borrow-and-return-system/components/BorrowForm.jsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Icon from 'components/AppIcon';
 import Button from 'components/ui/Button';
 import Input from 'components/ui/Input';
 import Select from 'components/ui/Select';
+
+// Order in which school sections should appear in the item picker.
+const SECTION_ORDER = ["Infant School", "Junior School", "Secondary School", "Unassigned"];
 
 const BorrowForm = ({ inventory, onBorrow, loading }) => {
   const [selectedItem, setSelectedItem] = useState('');
@@ -12,11 +15,26 @@ const BorrowForm = ({ inventory, onBorrow, loading }) => {
   const [errors,       setErrors]       = useState({});
   const [successMsg,   setSuccessMsg]   = useState('');
 
-  const itemOptions = inventory?.map(item => ({
-    value:    item.id,
-    label:    `${item.name} (Available: ${item.available})`,
-    disabled: item.available === 0,
-  }));
+  // Sort items by section (using SECTION_ORDER), then by name, and prefix
+  // the dropdown label with the section so teachers can scan by school.
+  const itemOptions = useMemo(() => {
+    const sectionRank = (s) => {
+      const key = s && SECTION_ORDER.includes(s) ? s : "Unassigned";
+      return SECTION_ORDER.indexOf(key);
+    };
+    return (inventory || [])
+      .slice()
+      .sort((a, b) => {
+        const diff = sectionRank(a.section) - sectionRank(b.section);
+        if (diff !== 0) return diff;
+        return (a.name || '').localeCompare(b.name || '');
+      })
+      .map(item => ({
+        value:    item.id,
+        label:    `[${item.section || "Unassigned"}] ${item.name} (Available: ${item.available})`,
+        disabled: item.available === 0,
+      }));
+  }, [inventory]);
 
   const selectedInventoryItem = inventory?.find(i => i.id === selectedItem);
 
@@ -98,7 +116,8 @@ const BorrowForm = ({ inventory, onBorrow, loading }) => {
             <Icon name="Info" size={14} color="var(--color-primary)" strokeWidth={2} />
             <span className="text-xs" style={{ fontFamily: 'var(--font-caption)', color: 'var(--color-muted-foreground)' }}>
               <strong style={{ color: 'var(--color-foreground)' }}>{selectedInventoryItem.name}</strong>
-              {' '}— Category: {selectedInventoryItem.category}
+              {' '}— Section: {selectedInventoryItem.section || 'Unassigned'}
+              {' '}| Category: {selectedInventoryItem.category}
               {' '}| Total: {selectedInventoryItem.total}
               {' '}| Available:{' '}
               <strong style={{ color: selectedInventoryItem.available > 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
