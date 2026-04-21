@@ -2,11 +2,23 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import * as api from "../services/usersApi";
 
+// Dedup same-tab re-fetches within this window.
+const FETCH_TTL_MS = 30 * 1000;
+
 export const fetchUsers = createAsyncThunk(
   "users/fetch",
   async (_, { rejectWithValue }) => {
     try { return await api.listUsers(); }
     catch (e) { return rejectWithValue(e.message); }
+  },
+  {
+    condition: (_, { getState }) => {
+      const s = getState().users;
+      if (s.loading) return false;
+      if (typeof s.lastFetched === "number" &&
+          Date.now() - s.lastFetched < FETCH_TTL_MS) return false;
+      return true;
+    },
   }
 );
 
@@ -45,6 +57,7 @@ const usersSlice = createSlice({
     loading: false,
     actionLoading: false,
     error: null,
+    lastFetched: null,
   },
   reducers: {
     clearUsersError: (state) => { state.error = null; },
@@ -53,7 +66,11 @@ const usersSlice = createSlice({
     builder
       .addCase(fetchUsers.pending,   (state) => { state.loading = true; state.error = null; })
       .addCase(fetchUsers.rejected,  (state, { payload }) => { state.loading = false; state.error = payload; })
-      .addCase(fetchUsers.fulfilled, (state, { payload }) => { state.loading = false; state.items = payload || []; });
+      .addCase(fetchUsers.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.items = payload || [];
+        state.lastFetched = Date.now();
+      });
 
     builder
       .addCase(createUserThunk.pending,   (state) => { state.actionLoading = true; state.error = null; })

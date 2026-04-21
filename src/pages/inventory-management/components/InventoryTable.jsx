@@ -50,7 +50,11 @@ function groupBySection(items) {
     .map((name) => ({ name, items: groups[name] }));
 }
 
-const ItemRow = ({ item, idx, onEdit, onDelete }) => {
+// Memoized so row-level re-renders only fire when this specific item,
+// its index parity, or the edit/delete handlers actually change. Big
+// win when the parent re-renders for unrelated reasons (search input,
+// modal toggles, etc.) with dozens of rows mounted.
+const ItemRow = React.memo(function ItemRow({ item, idx, onEdit, onDelete }) {
   const available = item?.totalQty - item?.borrowed;
   return (
     <tr
@@ -93,9 +97,9 @@ const ItemRow = ({ item, idx, onEdit, onDelete }) => {
       </td>
     </tr>
   );
-};
+});
 
-const MobileCard = ({ item, onEdit, onDelete }) => {
+const MobileCard = React.memo(function MobileCard({ item, onEdit, onDelete }) {
   const available = item?.totalQty - item?.borrowed;
   return (
     <div
@@ -133,7 +137,7 @@ const MobileCard = ({ item, onEdit, onDelete }) => {
       </div>
     </div>
   );
-};
+});
 
 const SectionHeader = ({ name, count }) => (
   <div className="flex items-center gap-2 mt-6 mb-2 first:mt-0">

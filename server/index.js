@@ -1,10 +1,11 @@
 // server/index.js
 require("dotenv").config();
-const express  = require("express");
-const cors     = require("cors");
-const fetch    = require("node-fetch");
-const bcrypt   = require("bcryptjs");
-const jwt      = require("jsonwebtoken");
+const express     = require("express");
+const cors        = require("cors");
+const compression = require("compression");
+const fetch       = require("node-fetch");
+const bcrypt      = require("bcryptjs");
+const jwt         = require("jsonwebtoken");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +17,9 @@ if (!SCRIPT_URL)   { console.error("❌  GOOGLE_SCRIPT_URL is not set in server/
 if (!JWT_SECRET)   { console.error("❌  JWT_SECRET is not set in server/.env");         process.exit(1); }
 
 // ── Middleware ────────────────────────────────────────────────
+// gzip the proxied JSON responses; typically 5–10× smaller on the wire.
+app.use(compression());
+
 app.use(cors({
   origin: [
     "http://localhost:4028",
@@ -56,9 +60,62 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// ── In-memory TTL cache for Apps Script reads ────────────────
+// Apps Script round-trips are 500ms–2s. Caching the common reads for
+// 30s knocks most page loads down to near-instant without risking stale
+// inventory for long. Every write action invalidates the relevant keys
+// so changes propagate immediately.
+const CACHE_TTL_MS = 30 * 1000;
+const scriptCache  = new Map(); // key -> { data, expires }
+
+function cacheKey(action, params = {}) {
+  const sorted = Object.keys(params).sort().map((k) => `${k}=${params[k]}`).join("&");
+  return sorted ? `${action}?${sorted}` : action;
+}
+
+function cacheGet(key) {
+  const hit = scriptCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expires < Date.now()) { scriptCache.delete(key); return undefined; }
+  return hit.data;
+}
+
+function cacheSet(key, data) {
+  scriptCache.set(key, { data, expires: Date.now() + CACHE_TTL_MS });
+}
+
+function invalidateCache(...prefixes) {
+  for (const k of scriptCache.keys()) {
+    if (prefixes.some((p) => k.startsWith(p))) scriptCache.delete(k);
+  }
+}
+
+// Map a mutating action to the read prefixes it invalidates.
+function invalidationsFor(action) {
+  switch (action) {
+    case "addItem":
+    case "updateItem":
+    case "deleteItem":
+      return ["getItems", "getDashboard"];
+    case "borrowItem":
+    case "returnItem":
+      return ["getTransactions", "getDashboard"];
+    case "addUser":
+    case "updateUser":
+    case "deleteUser":
+      return ["getUsers"];
+    default:
+      return [];
+  }
+}
+
 // ── Apps Script client helpers ────────────────────────────────
 // The Apps Script has no auth layer — only this server knows its URL.
 async function scriptGet(action, params = {}) {
+  const key = cacheKey(action, params);
+  const hit = cacheGet(key);
+  if (hit !== undefined) return hit;
+
   const qs  = new URLSearchParams({ action, ...params }).toString();
   const res = await fetch(`${SCRIPT_URL}?${qs}`, {
     method: "GET", redirect: "follow",
@@ -69,6 +126,7 @@ async function scriptGet(action, params = {}) {
   try { json = JSON.parse(text); }
   catch { throw new Error(`Apps Script returned non-JSON: ${text.slice(0, 300)}`); }
   if (json.status === "error") throw new Error(json.message);
+  cacheSet(key, json.data);
   return json.data;
 }
 
@@ -175,6 +233,7 @@ app.post("/api/users", requireAuth, requireAdmin, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const created = await scriptPost({ action: "addUser", username, passwordHash, role });
+    invalidateCache("getUsers");
     res.json({ status: "ok", data: created });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
@@ -201,6 +260,7 @@ app.patch("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
     }
 
     const result = await scriptPost(payload);
+    invalidateCache("getUsers");
     res.json({ status: "ok", data: result });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
@@ -219,32 +279,25 @@ app.delete("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
     }
 
     const result = await scriptPost({ action: "deleteUser", id });
+    invalidateCache("getUsers");
     res.json({ status: "ok", data: result });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-// ── GET proxy (protected) ─────────────────────────────────────
+// ── GET proxy (protected, cached) ─────────────────────────────
 app.get("/api/sheets", requireAuth, async (req, res) => {
+  const { action, ...params } = req.query;
+  if (!action) {
+    return res.status(400).json({ status: "error", message: "Missing action parameter." });
+  }
   try {
-    const qs  = new URLSearchParams(req.query).toString();
-    const url = `${SCRIPT_URL}?${qs}`;
-    console.log(`[GET] ${req.user.username} → ${url}`);
-
-    const response = await fetch(url, {
-      method: "GET", redirect: "follow",
-      headers: { "User-Agent": "RoboLend-Server/1.0" },
-    });
-
-    const text = await response.text();
-    try {
-      return res.json(JSON.parse(text));
-    } catch {
-      return res.status(502).json({ status: "error", message: `Apps Script returned non-JSON: ${text.slice(0, 300)}` });
-    }
+    const data = await scriptGet(action, params);
+    console.log(`[GET] ${req.user.username} → ${action} (cached=${scriptCache.has(cacheKey(action, params))})`);
+    return res.json({ status: "ok", data });
   } catch (err) {
-    res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({ status: "error", message: err.message });
   }
 });
 
@@ -263,6 +316,42 @@ app.post("/api/sheets", requireAuth, async (req, res) => {
     return res.status(400).json({ status: "error", message: "Use /api/users for user management." });
   }
 
+  // ── Borrow: attach authoritative owner (username) server-side ─
+  // Teachers can never pretend to borrow as someone else; the owner
+  // always matches their JWT. Admins may specify `borrowedBy` in the
+  // body to assign a borrow to a specific teacher's username.
+  if (req.body?.action === "borrowItem") {
+    if (req.user?.role === "admin") {
+      req.body.borrowedBy = req.body.borrowedBy || req.body.teacherName || req.user.username;
+    } else {
+      req.body.borrowedBy = req.user.username;
+    }
+  }
+
+  // ── Return: admin OR the original borrower only ───────────────
+  if (req.body?.action === "returnItem") {
+    if (req.user?.role !== "admin") {
+      try {
+        const txns = await scriptGet("getTransactions");
+        const txn  = (txns || []).find((t) => String(t.id) === String(req.body.id));
+        if (!txn) {
+          return res.status(404).json({ status: "error", message: "Transaction not found." });
+        }
+        // Fallback to teacherName for transactions created before the
+        // borrowedBy column existed (legacy rows).
+        const owner = txn.borrowedBy || txn.teacherName;
+        if (String(owner) !== String(req.user.username)) {
+          return res.status(403).json({
+            status: "error",
+            message: "Only the borrower or an admin can mark this returned.",
+          });
+        }
+      } catch (err) {
+        return res.status(500).json({ status: "error", message: err.message });
+      }
+    }
+  }
+
   try {
     console.log(`[POST] ${req.user.username} (${req.user.role}) → action: ${req.body?.action}`);
 
@@ -273,11 +362,20 @@ app.post("/api/sheets", requireAuth, async (req, res) => {
     });
 
     const text = await response.text();
-    try {
-      return res.json(JSON.parse(text));
-    } catch {
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch {
       return res.status(502).json({ status: "error", message: `Apps Script returned non-JSON: ${text.slice(0, 300)}` });
     }
+
+    // Invalidate any cached reads affected by this write so subsequent
+    // GETs see fresh data immediately.
+    if (parsed?.status === "ok") {
+      const keys = invalidationsFor(req.body?.action);
+      if (keys.length) invalidateCache(...keys);
+    }
+
+    return res.json(parsed);
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }

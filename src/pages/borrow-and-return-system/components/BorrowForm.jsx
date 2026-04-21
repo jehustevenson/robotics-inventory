@@ -1,5 +1,6 @@
 // src/pages/borrow-and-return-system/components/BorrowForm.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import Icon from 'components/AppIcon';
 import Button from 'components/ui/Button';
 import Input from 'components/ui/Input';
@@ -9,11 +10,22 @@ import Select from 'components/ui/Select';
 const SECTION_ORDER = ["Infant School", "Junior School", "Secondary School", "Unassigned"];
 
 const BorrowForm = ({ inventory, onBorrow, loading }) => {
+  const { username, role } = useSelector((s) => s.auth);
+  const isAdmin = role === "admin";
+
+  // Teachers borrow as themselves — pre-fill and lock the field so the
+  // `borrowedBy` the server assigns matches what they see.
   const [selectedItem, setSelectedItem] = useState('');
   const [quantity,     setQuantity]     = useState('');
-  const [teacherName,  setTeacherName]  = useState('');
+  const [teacherName,  setTeacherName]  = useState(isAdmin ? '' : (username || ''));
   const [errors,       setErrors]       = useState({});
   const [successMsg,   setSuccessMsg]   = useState('');
+
+  // Keep teacherName in sync with the logged-in user for non-admins
+  // (covers the rare case where the user switches without a remount).
+  useEffect(() => {
+    if (!isAdmin) setTeacherName(username || '');
+  }, [isAdmin, username]);
 
   // Sort items by section (using SECTION_ORDER), then by name, and prefix
   // the dropdown label with the section so teachers can scan by school.
@@ -68,7 +80,8 @@ const BorrowForm = ({ inventory, onBorrow, loading }) => {
       setSuccessMsg(`Successfully borrowed ${quantity} × ${selectedInventoryItem?.name}.`);
       setSelectedItem('');
       setQuantity('');
-      setTeacherName('');
+      // Admins clear the field; teachers keep theirs prefilled.
+      if (isAdmin) setTeacherName('');
     }
   };
 
@@ -140,16 +153,27 @@ const BorrowForm = ({ inventory, onBorrow, loading }) => {
           required
         />
 
-        {/* Teacher name */}
-        <Input
-          label="Teacher Name"
-          type="text"
-          placeholder="Enter your full name"
-          value={teacherName}
-          onChange={e => setTeacherName(e.target.value)}
-          error={errors.teacherName}
-          required
-        />
+        {/* Teacher name — locked to logged-in username for teachers */}
+        <div>
+          <Input
+            label={isAdmin ? "Borrower (teacher's username)" : "Borrowing as"}
+            type="text"
+            placeholder={isAdmin ? "e.g. teacher1" : "Your username"}
+            value={teacherName}
+            onChange={e => isAdmin && setTeacherName(e.target.value)}
+            error={errors.teacherName}
+            readOnly={!isAdmin}
+            required
+          />
+          <p
+            className="text-xs mt-1"
+            style={{ color: 'var(--color-muted-foreground)', fontFamily: 'var(--font-caption)' }}
+          >
+            {isAdmin
+              ? "Enter the teacher's username. Only they (or an admin) will be able to mark this returned."
+              : `You are borrowing as "${username}". Only you or an admin can mark this returned.`}
+          </p>
+        </div>
 
         <Button
           variant="default"

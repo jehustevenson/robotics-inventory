@@ -2,6 +2,15 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import * as api from "../services/sheetsApi";
 
+// Skip re-fetching if the last successful fetch was within this window.
+// The Node proxy caches at the same horizon, so this mostly saves the
+// React render + network-roundtrip overhead on rapid navigation.
+const FETCH_TTL_MS = 30 * 1000;
+
+function isFresh(ts) {
+  return typeof ts === "number" && Date.now() - ts < FETCH_TTL_MS;
+}
+
 // ── Async Thunks ──────────────────────────────────────────────
 
 export const fetchDashboard = createAsyncThunk(
@@ -9,6 +18,13 @@ export const fetchDashboard = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try { return await api.getDashboard(); }
     catch (e) { return rejectWithValue(e.message); }
+  },
+  {
+    condition: (_, { getState }) => {
+      const s = getState().inventory;
+      if (s.loading) return false;
+      return !isFresh(s.lastFetchedDashboard);
+    },
   }
 );
 
@@ -17,6 +33,13 @@ export const fetchItems = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try { return await api.getItems(); }
     catch (e) { return rejectWithValue(e.message); }
+  },
+  {
+    condition: (_, { getState }) => {
+      const s = getState().inventory;
+      if (s.loading) return false;
+      return !isFresh(s.lastFetchedItems);
+    },
   }
 );
 
@@ -25,6 +48,13 @@ export const fetchTransactions = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try { return await api.getTransactions(); }
     catch (e) { return rejectWithValue(e.message); }
+  },
+  {
+    condition: (_, { getState }) => {
+      const s = getState().inventory;
+      if (s.loading) return false;
+      return !isFresh(s.lastFetchedTransactions);
+    },
   }
 );
 
@@ -79,6 +109,9 @@ const inventorySlice = createSlice({
     loading: false,
     actionLoading: false, // for add/edit/delete/borrow/return
     error: null,
+    lastFetchedItems:        null,
+    lastFetchedTransactions: null,
+    lastFetchedDashboard:    null,
   },
   reducers: {
     clearError: (state) => { state.error = null; },
@@ -101,6 +134,10 @@ const inventorySlice = createSlice({
         state.loading = false;
         state.items        = payload.items        || [];
         state.transactions = payload.transactions || [];
+        const now = Date.now();
+        state.lastFetchedDashboard    = now;
+        state.lastFetchedItems        = now;
+        state.lastFetchedTransactions = now;
       });
 
     // ── fetchItems ────────────────────────────────────────────
@@ -110,6 +147,7 @@ const inventorySlice = createSlice({
       .addCase(fetchItems.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.items = payload || [];
+        state.lastFetchedItems = Date.now();
       });
 
     // ── fetchTransactions ─────────────────────────────────────
@@ -119,6 +157,7 @@ const inventorySlice = createSlice({
       .addCase(fetchTransactions.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.transactions = payload || [];
+        state.lastFetchedTransactions = Date.now();
       });
 
     // ── addItem ───────────────────────────────────────────────

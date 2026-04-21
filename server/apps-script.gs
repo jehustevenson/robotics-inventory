@@ -24,7 +24,7 @@ const USERS_SHEET        = "Users";
 
 const ITEMS_COLS = ["id","name","category","totalQuantity","createdAt","section"];
 const TXN_COLS   = ["id","itemId","itemName","category","quantity",
-                    "teacherName","borrowDate","returnDate","returned"];
+                    "teacherName","borrowDate","returnDate","returned","borrowedBy"];
 const USER_COLS  = ["id","username","passwordHash","role","createdAt"];
 
 // ── Bootstrap: create sheets + headers if missing ────────────
@@ -67,6 +67,8 @@ function setupSheets() {
       .setFontWeight("bold")
       .setBackground("#2D5A3D")
       .setFontColor("#FFFFFF");
+  } else {
+    ensureTxnSchema(txnSheet);
   }
 
   let userSheet = ss.getSheetByName(USERS_SHEET);
@@ -114,9 +116,52 @@ function ensureItemsSchema(sheet) {
   });
 }
 
+// Same idea, but for Transactions. Adds "borrowedBy" to old sheets so
+// return-permission checks have something to compare against.
+function ensureTxnSchema(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, Math.max(1, lastCol)).getValues()[0].map(String);
+  TXN_COLS.forEach((colName) => {
+    if (headers.indexOf(colName) === -1) {
+      const newColIndex = sheet.getLastColumn() + 1;
+      sheet.getRange(1, newColIndex).setValue(colName)
+        .setFontWeight("bold")
+        .setBackground("#2D5A3D")
+        .setFontColor("#FFFFFF");
+    }
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 function getSheet(name) {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+}
+
+// ── CacheService wrapper ──────────────────────────────────────
+// SpreadsheetApp reads are the slowest part of every request (each
+// getDataRange().getValues() is ~200–500ms). Caching serialized JSON
+// by key for 5 minutes turns subsequent reads into memory lookups.
+// Writes clear the affected keys, so any change is visible on the next
+// request. Cache size cap per entry in Apps Script is ~100KB, which is
+// plenty for these sheets.
+const CACHE_TTL_SEC = 300;
+
+function cacheRead(key, producer) {
+  const cache = CacheService.getScriptCache();
+  const hit   = cache.get(key);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (_) { /* fall through */ }
+  }
+  const fresh = producer();
+  try { cache.put(key, JSON.stringify(fresh), CACHE_TTL_SEC); } catch (_) {}
+  return fresh;
+}
+
+function cacheBust() {
+  // Pass each key we ever write so we don't leak stale data on mutation.
+  CacheService.getScriptCache().removeAll([
+    "items", "transactions", "users", "dashboard",
+  ]);
 }
 
 function sheetToObjects(sheet) {
@@ -168,40 +213,48 @@ function doGet(e) {
     const action = e.parameter.action;
 
     if (action === "getItems") {
-      return jsonResponse(sheetToObjects(getSheet(ITEMS_SHEET)));
+      return jsonResponse(cacheRead("items", function () {
+        return sheetToObjects(getSheet(ITEMS_SHEET));
+      }));
     }
 
     if (action === "getTransactions") {
-      return jsonResponse(sheetToObjects(getSheet(TRANSACTIONS_SHEET)));
+      return jsonResponse(cacheRead("transactions", function () {
+        return sheetToObjects(getSheet(TRANSACTIONS_SHEET));
+      }));
     }
 
     if (action === "getDashboard") {
-      const items = sheetToObjects(getSheet(ITEMS_SHEET));
-      const txns  = sheetToObjects(getSheet(TRANSACTIONS_SHEET));
-      const active = txns.filter(t => String(t.returned) !== "true");
+      return jsonResponse(cacheRead("dashboard", function () {
+        const items = sheetToObjects(getSheet(ITEMS_SHEET));
+        const txns  = sheetToObjects(getSheet(TRANSACTIONS_SHEET));
+        const active = txns.filter(t => String(t.returned) !== "true");
 
-      const totalBorrowed = active.reduce((s,t) => s + Number(t.quantity||0), 0);
-      const totalAvailable = items.reduce((s, item) => {
-        const b = active.filter(t => t.itemId === item.id)
-                        .reduce((a,t) => a + Number(t.quantity||0), 0);
-        return s + (Number(item.totalQuantity) - b);
-      }, 0);
+        const totalBorrowed = active.reduce((s,t) => s + Number(t.quantity||0), 0);
+        const totalAvailable = items.reduce((s, item) => {
+          const b = active.filter(t => t.itemId === item.id)
+                          .reduce((a,t) => a + Number(t.quantity||0), 0);
+          return s + (Number(item.totalQuantity) - b);
+        }, 0);
 
-      return jsonResponse({
-        totalItems: items.length,
-        totalBorrowed,
-        totalAvailable,
-        activeTransactions: active.length,
-        items,
-        transactions: txns,
-      });
+        return {
+          totalItems: items.length,
+          totalBorrowed,
+          totalAvailable,
+          activeTransactions: active.length,
+          items,
+          transactions: txns,
+        };
+      }));
     }
 
     // NOTE: getUsers returns passwordHash. The Node server strips the hash
     // before forwarding to the frontend. Apps Script is only reachable via
     // the Node proxy, so the hash never leaves the server boundary.
     if (action === "getUsers") {
-      return jsonResponse(sheetToObjects(getSheet(USERS_SHEET)));
+      return jsonResponse(cacheRead("users", function () {
+        return sheetToObjects(getSheet(USERS_SHEET));
+      }));
     }
 
     return errorResponse("Unknown action: " + action);
@@ -227,6 +280,7 @@ function doPost(e) {
       const now = new Date().toISOString();
       const sectionValue = section || "";
       getSheet(ITEMS_SHEET).appendRow([id, name, category, Number(totalQuantity), now, sectionValue]);
+      cacheBust();
       return jsonResponse({
         id, name, category,
         totalQuantity: Number(totalQuantity),
@@ -251,6 +305,7 @@ function doPost(e) {
         if (sectionCol !== -1) sheet.getRange(row, sectionCol).setValue(section);
       }
 
+      cacheBust();
       return jsonResponse({
         id, name, category,
         totalQuantity: Number(totalQuantity),
@@ -265,6 +320,7 @@ function doPost(e) {
       const row   = findRowById(sheet, id);
       if (row === -1) return errorResponse("Item not found: " + id);
       sheet.deleteRow(row);
+      cacheBust();
       return jsonResponse({ deleted: id });
     }
 
@@ -279,7 +335,7 @@ function doPost(e) {
         return errorResponse("Server busy, please retry.");
       }
       try {
-        const { itemId, itemName, category, quantity, teacherName } = body;
+        const { itemId, itemName, category, quantity, teacherName, borrowedBy } = body;
         if (!itemId || !quantity || !teacherName)
           return errorResponse("Missing fields");
 
@@ -298,17 +354,23 @@ function doPost(e) {
 
         const id         = generateId("txn");
         const borrowDate = new Date().toISOString();
+        // borrowedBy is the authoritative owner (username) used for return
+        // permission checks in the Node proxy. Falls back to teacherName for
+        // robustness if the server forgets to inject it.
+        const ownerUsername = borrowedBy || teacherName;
         getSheet(TRANSACTIONS_SHEET).appendRow([
           id, itemId, itemName || item.name,
           category || item.category,
           Number(quantity), teacherName,
-          borrowDate, "", false,
+          borrowDate, "", false, ownerUsername,
         ]);
+        cacheBust();
         return jsonResponse({
           id, itemId, itemName: itemName || item.name,
           category: category || item.category,
           quantity: Number(quantity), teacherName,
           borrowDate, returnDate: null, returned: false,
+          borrowedBy: ownerUsername,
         });
       } finally {
         lock.releaseLock();
@@ -325,6 +387,7 @@ function doPost(e) {
       const returnDate = new Date().toISOString();
       sheet.getRange(row, 8).setValue(returnDate);
       sheet.getRange(row, 9).setValue(true);
+      cacheBust();
       return jsonResponse({ id, returned: true, returnDate });
     }
 
@@ -345,6 +408,7 @@ function doPost(e) {
       const id  = generateId("user");
       const now = new Date().toISOString();
       sheet.appendRow([id, username, passwordHash, role, now]);
+      cacheBust();
       return jsonResponse({ id, username, role, createdAt: now });
     }
 
@@ -366,6 +430,7 @@ function doPost(e) {
         const hashCol = columnIndex(sheet, "passwordHash");
         sheet.getRange(row, hashCol).setValue(passwordHash);
       }
+      cacheBust();
       return jsonResponse({ id, updated: true });
     }
 
@@ -376,6 +441,7 @@ function doPost(e) {
       const row   = findRowById(sheet, id);
       if (row === -1) return errorResponse("User not found: " + id);
       sheet.deleteRow(row);
+      cacheBust();
       return jsonResponse({ deleted: id });
     }
 
